@@ -1,35 +1,39 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* -----------------------------
+   THEME TOKENS
+----------------------------- */
 @custom-variant dark (&:is(.dark *));
 
 :root {
   /* Light theme tokens (explicit hex colors for reliability) */
-  --background: #f1f5f9;            /* light gray background */
-  --foreground: #0f172a;            /* main text / headings (dark) */
-  --card: #ffffff;                  /* card bg */
-  --card-foreground: #0f172a;       /* card text */
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  --primary: #0f172a;               /* primary color (dark navy) */
+  --primary: #0f172a;
   --primary-foreground: #ffffff;
-  --secondary: #6d28d9;            /* purple accent */
+  --secondary: #6d28d9;
   --secondary-foreground: #ffffff;
-  --muted: #94a3b8;                 /* muted text (visible) */
-  --muted-foreground: #64748b;      /* placeholder / small text (visible) */
-  --accent: #10b981;                /* accent (green) */
+  --muted: #94a3b8;
+  --muted-foreground: #64748b;
+  --accent: #10b981;
   --accent-foreground: #ffffff;
-  --destructive: #ef4444;           /* red */
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #e6e9ee;                /* border color */
-  --input: #ffffff;                 /* input background */
-  --ring: #7c3aed;                  /* focus ring */
-  --chart-1: #10b981;               /* chart colors - explicit hex */
+  --border: #e6e9ee;
+  --input: #ffffff;
+  --ring: #7c3aed;
+  --chart-1: #10b981;
   --chart-2: #f59e0b;
   --chart-3: #0ea5e9;
   --chart-4: #4338ca;
   --chart-5: #ef4444;
   --radius: 0.5rem;
+
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
   --sidebar-primary: #6d28d9;
@@ -39,7 +43,9 @@
   --sidebar-ring: #7c3aed;
 }
 
-/* dark theme fallback (also explicit hex) */
+/* -----------------------------
+   DARK THEME
+----------------------------- */
 .dark {
   --background: #0b1220;
   --foreground: #e6edf3;
@@ -50,13 +56,13 @@
   --primary: #e6edf3;
   --primary-foreground: #0b1220;
   --secondary: #8b5cf6;
-  --secondary-foreground: #fff;
+  --secondary-foreground: #ffffff;
   --muted: #94a3b8;
   --muted-foreground: #cbd5e1;
   --accent: #10b981;
-  --accent-foreground: #fff;
+  --accent-foreground: #ffffff;
   --destructive: #ef4444;
-  --destructive-foreground: #fff;
+  --destructive-foreground: #ffffff;
   --border: #1f2937;
   --input: #0f1724;
   --ring: #7c3aed;
@@ -70,10 +76,13 @@
   --sidebar-border: #1f2937;
 }
 
-
+/* -----------------------------
+   TAILWIND CUSTOM THEME
+----------------------------- */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -93,15 +102,18 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -112,6 +124,9 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* -----------------------------
+   BASE STYLES
+----------------------------- */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -121,9 +136,12 @@
   }
 }
 
+/* -----------------------------
+   ✅ FIXED RECHARTS COLOR RULES
+----------------------------- */
+/* Removed the global "fill: none !important" that blocked colors */
 
-/* ===== Strong Recharts SVG fill blocker (paste at very end of globals.css) ===== */
-/* Aggressively clear fills for Recharts SVG elements so area-fill bugs disappear. */
+/* Keep only transparency background fix */
 .recharts-wrapper,
 .recharts-surface,
 .recharts-wrapper svg,
@@ -131,33 +149,10 @@
   background: transparent !important;
 }
 
-/* Clear fills on common shapes (path, rect, polygon) */
-.recharts-wrapper svg path,
-.recharts-wrapper svg rect,
-.recharts-wrapper svg polygon,
-.recharts-wrapper svg circle,
-.recharts-wrapper svg g,
-.recharts-wrapper svg polyline {
-  fill: none !important;
-}
+/* OPTIONAL: if you ever need to fix area chart overflow again,
+   scope fill clearing to a class, not globally. Example:
 
-/* Specific Recharts classes */
-.recharts-area,
-.recharts-area path,
-.recharts-area .recharts-curve,
-.recharts-area .recharts-area-curve,
-.recharts-line .recharts-curve,
-.recharts-curve,
-.recharts-surface > path,
-.recharts-surface > rect {
-  fill: none !important;
-  /* allow stroke to show from the element if present */
-}
-
-/* Remove any inline fill attribute on paths/rects inside recharts-wrapper */
-.recharts-wrapper svg [fill]:not([fill="none"]) {
-  fill: none !important;
-}
-
-/* If some element absolutely requires a background, you can target it later more narrowly.
-   For now this guarantees no filled blob will appear under charts. */
+   .buggy-chart .recharts-wrapper svg path {
+     fill: none !important;
+   }
+*/

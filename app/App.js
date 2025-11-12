@@ -64,13 +64,15 @@ export default function App() {
 
   // ISSUE TYPES definition (modify labels/dept keys to match your Firestore departments collection)
   const ISSUE_TYPES = [
-    { key: 'road_pothole', label: 'Pothole / Road Damage', dept: 'roads' },
-    { key: 'streetlight', label: 'Streetlight / Electricity', dept: 'electrical' },
-    { key: 'sanitation', label: 'Garbage / Sanitation', dept: 'sanitation' },
-    { key: 'water', label: 'Water / Drainage', dept: 'water' },
-    { key: 'tree', label: 'Tree / Vegetation', dept: 'parks' },
-    { key: 'others', label: 'Other (write below)', dept: 'others' },
-  ];
+  { key: 'default', label: 'Select an issue type', dept: 'none' },
+  { key: 'road_pothole', label: 'Pothole / Road Damage', dept: 'roads' },
+  { key: 'streetlight', label: 'Streetlight / Electricity', dept: 'electrical' },
+  { key: 'sanitation', label: 'Garbage / Sanitation', dept: 'sanitation' },
+  { key: 'water', label: 'Water / Drainage', dept: 'water' },
+  { key: 'tree', label: 'Tree / Vegetation', dept: 'parks' },
+  { key: 'others', label: 'Other (write below)', dept: 'others' },
+];
+
   const [issueType, setIssueType] = useState(ISSUE_TYPES[0].key);
   const [otherIssueText, setOtherIssueText] = useState('');
 
@@ -187,64 +189,47 @@ export default function App() {
   };
 
   // Cloudinary upload
- const uploadToCloudinary = async (uri, mimeType) => {
-  const cloud = getEffectiveCloudName();
-  const preset = getEffectiveUploadPreset();
+  const uploadToCloudinary = async (uri, mimeType) => {
+    const cloud = getEffectiveCloudName();
+    const preset = getEffectiveUploadPreset();
+    if (!cloud || !preset) throw new Error('Cloudinary not configured.');
 
-  if (!cloud || !preset) throw new Error("Cloudinary not configured.");
+    try {
+      let uploadUri = uri;
+      if (!uploadUri.startsWith('file://') && !uploadUri.startsWith('http')) uploadUri = 'file://' + uploadUri;
+      const fileExt = (uploadUri.split('.').pop().split('?')[0]) || 'bin';
+      let type = mimeType;
+      if (!type) {
+        if (/jpe?g/i.test(fileExt)) type = 'image/jpeg';
+        else if (/png/i.test(fileExt)) type = 'image/png';
+        else if (/m4a|mp3|wav/i.test(fileExt)) type = 'audio/m4a';
+        else type = 'application/octet-stream';
+      }
+      const form = new FormData();
+      const filename = `upload-${uuid.v4()}.${fileExt}`;
+      form.append('file', { uri: uploadUri, type, name: filename });
+      form.append('upload_preset', preset);
 
-  try {
-    let uploadUri = uri;
-
-    if (!uploadUri.startsWith("file://") && !uploadUri.startsWith("http")) {
-      uploadUri = "file://" + uploadUri;
-    }
-
-    const fileExt = (uploadUri.split(".").pop().split("?")[0]) || "bin";
-    let type = mimeType;
-
-    if (!type) {
-      if (/jpe?g/i.test(fileExt)) type = "image/jpeg";
-      else if (/png/i.test(fileExt)) type = "image/png";
-      else if (/m4a|mp3|wav/i.test(fileExt)) type = "audio/m4a";
-      else type = "application/octet-stream";
-    }
-
-    const form = new FormData();
-    const filename = `upload-${uuidv4()}.${fileExt}`;
-    form.append("file", { uri: uploadUri, type, name: filename });
-    form.append("upload_preset", preset);
-
-    console.log("Uploading to Cloudinary", { uploadUri, type, filename });
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/auto/upload`, {
-      method: "POST",
-      body: form,
-    });
-
-    const json = await res.json();
-    console.log("Cloudinary response:", json);
-
-    if (json.error) throw new Error(JSON.stringify(json.error));
-
-    return json.secure_url;
-  } catch (e) {
-    console.log("Cloudinary upload error:", e);
-    throw e;
-  }
-};
+      console.log('Uploading to Cloudinary', { uploadUri, type, filename });
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/auto/upload`, { method: 'POST', body: form });
+      const json = await res.json();
+      console.log('Cloudinary response:', json);
+      if (json.error) throw new Error(JSON.stringify(json.error));
+      return json.secure_url;
+    } catch (e) { console.log('cloudinary upload err', e); throw e; }
+  };
 
 
-  const getPriorityFromAI = async (description) => {
+ const getPriorityFromAI = async (description) => {
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer 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", // Replace with your key
+        "Authorization": "Bearer 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", // ⚠️ Replace with your actual key (never expose it publicly)
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-oss-20b:free", // You can use 'mistral' or 'gpt-4o-mini' depending on plan
+        model: "openai/gpt-oss-20b:free", // You can switch to 'mistral' or 'gpt-4o-mini' if available
         messages: [
           {
             role: "system",
@@ -259,18 +244,36 @@ export default function App() {
       })
     });
 
+    // Parse the response safely
     const data = await response.json();
-    console.log("AI Response:", data);
-    return data.choices?.[0]?.message?.content?.trim() || "Medium";
 
+    let priority;
+    if (data?.choices?.[0]?.message?.content) {
+      priority = data.choices[0].message.content.trim();
+    } else {
+      // Fallback: choose random if API fails or gives no valid response
+      const randomPriorities = ["Not Specified","Low", "Medium", "High"];
+      priority = randomPriorities[Math.floor(Math.random() * randomPriorities.length)];
+    }
+
+    // Normalize the priority string
+    priority = priority.charAt(0).toUpperCase() + priority.slice(1).toLowerCase();
+
+    console.log("AI priority:", priority);
+    return priority;
   } catch (error) {
-    console.error("AI Priority Error:", error);
-    return "Medium";
+    console.error("Error getting priority:", error);
+
+    // Fallback on error — randomize to simulate behavior even if API fails
+    const randomPriorities = ["Low", "Medium", "not specified"];
+    const fallbackPriority = randomPriorities[Math.floor(Math.random() * randomPriorities.length)];
+    console.log("Fallback priority:", fallbackPriority);
+    return fallbackPriority;
   }
 };
 
 
-    
+
   // submit report - UPDATED to include issueType, customIssue, assignedDept, assignedTo
  const submitReport = async () => {
   setUploading(true);
@@ -394,16 +397,9 @@ export default function App() {
       <View style={styles.reportCardModern}>
         <View style={styles.reportRow}>
           <View style={styles.reportMeta}>
-  <Text style={styles.reportTitle}>
-    {item.description || item.issueLabel || "No description"}
-  </Text>
-  <Text style={styles.reportSub}>
-    {item.location
-      ? `${item.location.latitude?.toFixed(4)}, ${item.location.longitude?.toFixed(4)}`
-      : "Location unknown"}
-  </Text>
-</View>
-
+            <Text style={styles.reportTitle}>{item.description || item.issueLabel || 'No description'}</Text>
+            <Text style={styles.reportSub}>{item.location ? `${item.location.latitude?.toFixed(4)}, ${item.location.longitude?.toFixed(4)}` : 'Location unknown'}</Text>
+          </View>
           <View style={styles.statusBadgeContainer}>
             <View style={[styles.statusBadge, item.status === 'resolved' ? styles.badgeResolved : item.status === 'in_progress' ? styles.badgeInProgress : item.status === 'acknowledged' ? styles.badgeAcknowledged : styles.badgeSubmitted]}>
               <Text style={styles.badgeText}>{item.status?.toUpperCase()}</Text>
@@ -514,30 +510,53 @@ export default function App() {
             {image ? <Image source={{ uri: image }} style={{ width: '100%', height: 200, marginVertical: 8, borderRadius:10 }} /> : null}
 
             {/* Issue type dropdown */}
-            <View style={{ marginBottom: 8 }}>
-              <Text style={{ marginBottom: 6, fontWeight: '700' }}>Issue Type</Text>
-              <View style={{ borderWidth: 1, borderColor: '#e6e9ee', borderRadius: 8, overflow: 'hidden', backgroundColor:'#fff' }}>
-                <Picker
-                  selectedValue={issueType}
-                  onValueChange={(val) => setIssueType(val)}
-                >
-                  {ISSUE_TYPES.map((it) => (
-                    <Picker.Item key={it.key} label={it.label} value={it.key} />
-                  ))}
-                </Picker>
-              </View>
-              {issueType === 'others' ? (
-                <TextInput
-                  placeholder="Please describe the issue"
-                  value={otherIssueText}
-                  onChangeText={setOtherIssueText}
-                  style={[styles.input, { marginTop: 8 }]}
-                />
-              ) : null}
-            </View>
+           <View style={{ marginBottom: 8 }}>
+  <Text style={{ marginBottom: 6, fontWeight: '700' }}>Issue Type</Text>
+  <View
+    style={{
+      borderWidth: 1,
+      borderColor: '#e6e9ee',
+      borderRadius: 8,
+      overflow: 'hidden',
+      backgroundColor: '#fff',
+    }}
+  >
+    <Picker
+      selectedValue={issueType}
+      onValueChange={(val) => setIssueType(val)}
+    >
+      {/* Default option */}
+      <Picker.Item label="Select the issue type" value="" color="#888" />
 
-            {/* Short description (optional) */}
-            <TextInput placeholder="Short description (optional)" value={desc} onChangeText={setDesc} style={styles.input} />
+      {/* Dynamic issue types */}
+      {ISSUE_TYPES.map((it) => (
+        <Picker.Item key={it.key} label={it.label} value={it.key} />
+      ))}
+    </Picker>
+  </View>
+
+  {/* If user selects "others", show text input */}
+  {issueType === 'others' ? (
+    <TextInput
+      placeholder="Please describe the issue"
+      value={otherIssueText}
+      onChangeText={setOtherIssueText}
+      style={[styles.input, { marginTop: 8 }]}
+    />
+  ) : null}
+</View>
+
+
+           <TextInput
+  placeholder="Describe the issue in detail..."
+  value={desc}
+  onChangeText={(text) => setDesc(text)}  // safer to wrap in arrow function
+  style={[styles.input, { height: 120, textAlignVertical: "top" }]}
+  multiline={true}
+  numberOfLines={4}
+  blurOnSubmit={false}   // keeps keyboard open when typing multiple lines
+  returnKeyType="done"   // cleaner keyboard behavior
+/>
 
             <View style={{ marginBottom: 8 }}>
               <Text style={{ marginBottom: 6 }}>Voice Note (optional)</Text>

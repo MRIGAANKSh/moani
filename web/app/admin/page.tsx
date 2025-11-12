@@ -42,28 +42,73 @@ export default function AdminDashboard() {
       <div className="admin-root">
         {/* Inline global override to immediately take effect (high specificity + !important) */}
         <style
-          dangerouslySetInnerHTML={{
-            __html: `
-              /* admin-root overrides - high priority to fix invisible/light text */
-              .admin-root, .admin-root * { color: #0f172a !important; }
-              .admin-root, .admin-root body { background-color: #f8fafc !important; }
-              .admin-root input, .admin-root textarea, .admin-root select { color: #0f172a !important; background-color: #fff !important; border-color: #e6e9ee !important; }
-              .admin-root ::placeholder { color: #94a3b8 !important; opacity: 1 !important; }
-              .admin-root .text-foreground, .admin-root .muted-foreground, .admin-root .placeholder-muted { color: #0f172a !important; }
-              .admin-root .card, .admin-root .bg-card, .admin-root .card * { background-color: #fff !important; }
-              /* tables */
-              .admin-root table, .admin-root th, .admin-root td { color: #0f172a !important; }
-              /* SVG/Icons */
-              .admin-root svg, .admin-root svg * { stroke: #0f172a !important; fill: #0f172a !important; }
-              /* chart texts (common class names) */
-              .admin-root .recharts-text, .admin-root .chartjs-render-monitor, .admin-root .legend, .admin-root .tick { fill: #0f172a !important; color: #0f172a !important; }
-              /* buttons */
-              .admin-root button, .admin-root .btn { color: #0f172a !important; }
-              /* ensure contrast for badges */
-              .admin-root .badge, .admin-root .status-badge { color: #fff !important; }
-            `,
-          }}
-        />
+  dangerouslySetInnerHTML={{
+    __html: `
+      /* admin-root overrides - high priority to fix invisible/light text */
+      .admin-root, .admin-root * { color: #0f172a !important; }
+      .admin-root, .admin-root body { background-color: #f8fafc !important; }
+
+      /* Inputs & placeholders */
+      .admin-root input, .admin-root textarea, .admin-root select {
+        color: #0f172a !important;
+        background-color: #fff !important;
+        border-color: #e6e9ee !important;
+      }
+      .admin-root ::placeholder {
+        color: #94a3b8 !important;
+        opacity: 1 !important;
+      }
+
+      /* Text & cards */
+      .admin-root .text-foreground,
+      .admin-root .muted-foreground,
+      .admin-root .placeholder-muted {
+        color: #0f172a !important;
+      }
+      .admin-root .card,
+      .admin-root .bg-card,
+      .admin-root .card * {
+        background-color: #fff !important;
+      }
+
+      /* Tables */
+      .admin-root table,
+      .admin-root th,
+      .admin-root td {
+        color: #0f172a !important;
+      }
+
+      /* SVG/Icons — scoped so charts keep gradients */
+      .admin-root :not(.recharts-wrapper):not(.recharts-surface) > svg,
+      .admin-root :not(.recharts-wrapper):not(.recharts-surface) > svg * {
+        stroke: #0f172a !important;
+        fill: #0f172a !important;
+      }
+
+      /* Chart texts (labels, ticks, legends) */
+      .admin-root .recharts-text,
+      .admin-root .chartjs-render-monitor,
+      .admin-root .legend,
+      .admin-root .tick {
+        fill: #0f172a !important;
+        color: #0f172a !important;
+      }
+
+      /* Buttons */
+      .admin-root button,
+      .admin-root .btn {
+        color: #0f172a !important;
+      }
+
+      /* Badges */
+      .admin-root .badge,
+      .admin-root .status-badge {
+        color: #fff !important;
+      }
+    `,
+  }}
+/>
+
 
         <div className="min-h-screen bg-slate-50 text-slate-900">
           <div className="p-6 max-w-[1200px] mx-auto space-y-6">
@@ -106,9 +151,11 @@ export default function AdminDashboard() {
             </div>
 
             {/* Recent Activity */}
-            <div className="grid gap-6 lg:grid-cols-2">
-              <ReportsChart reports={reports} days={30} />
-              <div className="space-y-4">{/* Placeholder for additional widgets */}</div>
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">📊 Reports Overview (Last 90 Days)</h2>
+              <div className="w-full bg-white p-4 rounded-2xl shadow-sm">
+                <ReportsChart reports={reports} days={90} />
+              </div>
             </div>
           </div>
         </div>
