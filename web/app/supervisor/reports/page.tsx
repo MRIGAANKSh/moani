@@ -7,6 +7,7 @@ import { SupervisorFilters, type SupervisorFilters as FiltersType } from "@/comp
 import { ReportsTable } from "@/components/reports/reports-table"
 import { SupervisorReportDetail } from "@/components/supervisor/supervisor-report-detail"
 import { useSupervisorReports } from "@/hooks/use-supervisor-reports"
+import { useAuth } from "@/hooks/use-auth"
 import type { Report } from "@/lib/types"
 
 const initialFilters: FiltersType = {
@@ -20,10 +21,16 @@ export default function SupervisorReportsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const { reports, loading } = useSupervisorReports()
+  const { user } = useAuth()
   const searchParams = useSearchParams()
 
-  // Filter reports based on current filters
-  const filteredReports = reports.filter((report) => {
+  // ✅ Only show reports assigned to the current supervisor
+  const assignedReports = reports.filter(
+    (report) => report.assignedTo === user?.uid
+  )
+
+  // ✅ Apply filters
+  const filteredReports = assignedReports.filter((report) => {
     if (filters.status && filters.status !== "all" && report.status !== filters.status) {
       return false
     }
@@ -33,35 +40,34 @@ export default function SupervisorReportsPage() {
       const reportDate = report.createdAt.toDate()
 
       switch (filters.dateRange) {
-        case "today":
+        case "today": {
           const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
           if (reportDate < todayStart) return false
           break
-        case "week":
+        }
+        case "week": {
           const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
           if (reportDate < weekStart) return false
           break
-        case "month":
+        }
+        case "month": {
           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
           if (reportDate < monthStart) return false
           break
+        }
       }
     }
 
     return true
   })
 
-  // Handle URL filter parameters
+  // ✅ Handle URL-based filters
   useEffect(() => {
     const urlFilter = searchParams.get("filter")
     if (urlFilter) {
       switch (urlFilter) {
         case "pending":
-          setFilters((prev) => ({ ...prev, status: "submitted" }))
-          break
         case "overdue":
-          // For overdue, we'll show all non-resolved reports
-          // The overdue logic is handled in the stats calculation
           setFilters((prev) => ({ ...prev, status: "submitted" }))
           break
       }
@@ -83,15 +89,27 @@ export default function SupervisorReportsPage() {
         <div>
           <h1 className="text-3xl font-bold">My Reports</h1>
           <p className="text-muted-foreground">
-            Reports assigned to your department. Total: {filteredReports.length} of {reports.length}
+            Reports assigned to you. Showing {filteredReports.length} of {assignedReports.length}
           </p>
         </div>
 
-        <SupervisorFilters filters={filters} onFiltersChange={setFilters} onClearFilters={handleClearFilters} />
+        <SupervisorFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClearFilters={handleClearFilters}
+        />
 
-        <ReportsTable reports={filteredReports} onViewReport={handleViewReport} loading={loading} />
+        <ReportsTable
+          reports={filteredReports}
+          onViewReport={handleViewReport}
+          loading={loading}
+        />
 
-        <SupervisorReportDetail report={selectedReport} open={isModalOpen} onOpenChange={setIsModalOpen} />
+        <SupervisorReportDetail
+          report={selectedReport}
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+        />
       </div>
     </SupervisorLayout>
   )
