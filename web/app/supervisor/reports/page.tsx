@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { SupervisorLayout } from "@/components/layout/supervisor-layout"
 import { SupervisorFilters, type SupervisorFilters as FiltersType } from "@/components/supervisor/supervisor-filters"
@@ -16,71 +16,81 @@ const initialFilters: FiltersType = {
 }
 
 export default function SupervisorReportsPage() {
-  const [filters, setFilters] = useState<FiltersType>(initialFilters)
+  // ---------------------
+  // Hooks MUST always run
+  // ---------------------
+  const { user } = useAuth()
+  const { reports, loading } = useSupervisorReports()
+  const searchParams = useSearchParams()
+
+  const [filters, setFilters] = useState(initialFilters)
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const { reports, loading } = useSupervisorReports()
-  const { user } = useAuth()
-  const searchParams = useSearchParams()
+  // ------------------------------------------
+  // Always run memo (even if user = null)
+  // ------------------------------------------
+  const assignedReports = useMemo(() => {
+    if (!user?.email) return []
+    return reports.filter((report) => report.assignedTo === user.email)
+  }, [reports, user?.email])
 
-  // ✅ Only show reports assigned to the current supervisor
-  const assignedReports = reports.filter(
-    (report) => report.assignedTo === user?.uid
-  )
+  const filteredReports = useMemo(() => {
+    return assignedReports.filter((report) => {
+      const createdAt =
+        report.createdAt?.toDate?.() ??
+        new Date(report.createdAt ?? new Date())
 
-  // ✅ Apply filters
-  const filteredReports = assignedReports.filter((report) => {
-    if (filters.status && filters.status !== "all" && report.status !== filters.status) {
-      return false
-    }
+      // Status filter
+      if (filters.status && filters.status !== "all") {
+        if (report.status !== filters.status) return false
+      }
 
-    if (filters.dateRange && filters.dateRange !== "all") {
-      const now = new Date()
-      const reportDate = report.createdAt.toDate()
+      // Date range filter
+      if (filters.dateRange && filters.dateRange !== "all") {
+        const now = new Date()
 
-      switch (filters.dateRange) {
-        case "today": {
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-          if (reportDate < todayStart) return false
-          break
-        }
-        case "week": {
-          const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          if (reportDate < weekStart) return false
-          break
-        }
-        case "month": {
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-          if (reportDate < monthStart) return false
-          break
+        switch (filters.dateRange) {
+          case "today": {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            if (createdAt < start) return false
+            break
+          }
+          case "week": {
+            const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+            if (createdAt < start) return false
+            break
+          }
+          case "month": {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1)
+            if (createdAt < start) return false
+            break
+          }
         }
       }
-    }
 
-    return true
-  })
+      return true
+    })
+  }, [assignedReports, filters])
 
-  // ✅ Handle URL-based filters
+  // URL sync
   useEffect(() => {
-    const urlFilter = searchParams.get("filter")
-    if (urlFilter) {
-      switch (urlFilter) {
-        case "pending":
-        case "overdue":
-          setFilters((prev) => ({ ...prev, status: "submitted" }))
-          break
-      }
+    const f = searchParams.get("filter")
+
+    if (f === "pending" || f === "overdue") {
+      setFilters((prev) => ({ ...prev, status: "submitted" }))
     }
   }, [searchParams])
 
-  const handleViewReport = (report: Report) => {
-    setSelectedReport(report)
-    setIsModalOpen(true)
-  }
-
-  const handleClearFilters = () => {
-    setFilters(initialFilters)
+  // -------------------------------
+  // SAFE return AFTER all hooks ran
+  // -------------------------------
+  if (!user) {
+    return (
+      <SupervisorLayout>
+        <p>Loading...</p>
+      </SupervisorLayout>
+    )
   }
 
   return (
@@ -89,19 +99,22 @@ export default function SupervisorReportsPage() {
         <div>
           <h1 className="text-3xl font-bold">My Reports</h1>
           <p className="text-muted-foreground">
-            Reports assigned to you. Showing {filteredReports.length} of {assignedReports.length}
+            Showing {filteredReports.length} of {assignedReports.length} assigned reports
           </p>
         </div>
 
         <SupervisorFilters
           filters={filters}
           onFiltersChange={setFilters}
-          onClearFilters={handleClearFilters}
+          onClearFilters={() => setFilters(initialFilters)}
         />
 
         <ReportsTable
           reports={filteredReports}
-          onViewReport={handleViewReport}
+          onViewReport={(r) => {
+            setSelectedReport(r)
+            setIsModalOpen(true)
+          }}
           loading={loading}
         />
 

@@ -14,16 +14,15 @@ export default function SupervisorDashboard() {
   const { reports, loading: reportsLoading } = useSupervisorReports()
   const router = useRouter()
 
-  // ✅ Redirect if not supervisor
+  // Redirect non-supervisors
   if (!authLoading && (!user || user.role !== "supervisor")) {
     router.push("/")
     return null
   }
 
-  // ✅ Filter only reports assigned to this supervisor
-  const assignedReports = reports.filter((r) => r.assignedTo === user?.uid)
+  // Filter using EMAIL (important)
+  const assignedReports = reports.filter((r) => r.assignedTo === user?.email)
 
-  // ✅ Compute stats only from assigned reports
   const stats = useSupervisorStats(assignedReports)
 
   if (authLoading || reportsLoading) {
@@ -39,7 +38,6 @@ export default function SupervisorDashboard() {
   return (
     <SupervisorLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold">
             Welcome back, {user?.name || "Supervisor"}
@@ -52,30 +50,10 @@ export default function SupervisorDashboard() {
 
         {/* KPI Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <KPICard
-            title="Total Assigned"
-            value={stats.total}
-            description="All reports assigned to you"
-            icon={FileText}
-          />
-          <KPICard
-            title="Open Reports"
-            value={stats.open}
-            description="Pending resolution"
-            icon={AlertCircle}
-          />
-          <KPICard
-            title="Overdue"
-            value={stats.overdue}
-            description="Over 48 hours old"
-            icon={AlertTriangle}
-          />
-          <KPICard
-            title="New Today"
-            value={stats.today}
-            description="Submitted today"
-            icon={Clock}
-          />
+          <KPICard title="Total Assigned" value={stats.total} description="All reports assigned to you" icon={FileText} />
+          <KPICard title="Open Reports" value={stats.open} description="Pending resolution" icon={AlertCircle} />
+          <KPICard title="Overdue" value={stats.overdue} description="Over 48 hours old" icon={AlertTriangle} />
+          <KPICard title="New Today" value={stats.today} description="Submitted today" icon={Clock} />
         </div>
 
         {/* Quick Actions */}
@@ -83,30 +61,30 @@ export default function SupervisorDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>
-                Common tasks for managing your assigned reports
-              </CardDescription>
+              <CardDescription>Common tasks for managing your assigned reports</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
                 variant="outline"
-                className="w-full justify-start bg-transparent"
+                className="w-full justify-start"
                 onClick={() => router.push("/supervisor/reports?filter=pending")}
               >
                 <AlertCircle className="h-4 w-4 mr-2" />
                 View Pending Reports ({stats.open})
               </Button>
+
               <Button
                 variant="outline"
-                className="w-full justify-start bg-transparent"
+                className="w-full justify-start"
                 onClick={() => router.push("/supervisor/reports?filter=overdue")}
               >
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 View Overdue Reports ({stats.overdue})
               </Button>
+
               <Button
                 variant="outline"
-                className="w-full justify-start bg-transparent"
+                className="w-full justify-start"
                 onClick={() => router.push("/supervisor/reports")}
               >
                 <FileText className="h-4 w-4 mr-2" />
@@ -118,20 +96,18 @@ export default function SupervisorDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Status Summary</CardTitle>
-              <CardDescription>
-                Current status distribution of your assigned reports
-              </CardDescription>
+              <CardDescription>Current status distribution of your assigned reports</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between">
                 <span className="text-sm">Acknowledged</span>
                 <span className="font-medium">{stats.acknowledged}</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between">
                 <span className="text-sm">In Progress</span>
                 <span className="font-medium">{stats.inProgress}</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between">
                 <span className="text-sm">Resolved</span>
                 <span className="font-medium">{stats.total - stats.open}</span>
               </div>

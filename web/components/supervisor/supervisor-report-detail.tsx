@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,8 @@ import { IssueTypeBadge } from "@/components/reports/issue-type-badge"
 import { MapPin, ExternalLink, Copy } from "lucide-react"
 import type { Report } from "@/lib/types"
 import { useSupervisorActions } from "@/hooks/use-supervisor-actions"
+import { collection, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface SupervisorReportDetailProps {
   report: Report | null
@@ -25,7 +27,29 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
   const [note, setNote] = useState("")
   const [isUpdating, setIsUpdating] = useState(false)
 
-  const { updateReportStatus, addReportNote } = useSupervisorActions()
+  // 🔥 NEW: workers list + selected worker
+  const [workers, setWorkers] = useState<{ email: string; name: string }[]>([])
+  const [selectedWorker, setSelectedWorker] = useState("")
+
+  const { updateReportStatus, addReportNote, assignReportToWorker } = useSupervisorActions()
+
+  useEffect(() => {
+    const fetchWorkers = async () => {
+      const snapshot = await getDocs(collection(db, "users"))
+      const workerList: any = []
+      snapshot.forEach((doc) => {
+        if (doc.data().role === "worker") {
+          workerList.push({
+            email: doc.id,
+            name: doc.data().name,
+          })
+        }
+      })
+      setWorkers(workerList)
+    }
+
+    fetchWorkers()
+  }, [])
 
   if (!report) return null
 
@@ -58,6 +82,21 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
     }
   }
 
+  // 🔥 NEW: Assign worker from dropdown
+  const handleAssignWorker = async () => {
+    if (!selectedWorker) return
+
+    setIsUpdating(true)
+    try {
+      await assignReportToWorker(report.id, selectedWorker)
+      setSelectedWorker("")
+    } catch (err) {
+      console.error("Failed to assign worker:", err)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
@@ -76,10 +115,11 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
         </DialogHeader>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Report Information */}
+          {/* LEFT PANEL */}
           <div className="space-y-4">
             <div>
               <h3 className="font-semibold mb-2">Report Information</h3>
+
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <IssueTypeBadge issueType={report.issueType} />
@@ -103,21 +143,22 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
                   <p className="text-sm font-medium">Assignment</p>
                   <div className="flex items-center gap-2 mt-1">
                     {report.assignedDept && <Badge variant="outline">{report.assignedDept}</Badge>}
-                    {report.assignedTo && <Badge variant="secondary">Assigned to: {report.assignedTo}</Badge>}
+                    {report.assignedWorkerName && (
+                      <Badge variant="secondary">Worker: {report.assignedWorkerName}</Badge>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Media */}
             {(report.imageUrl || report.audioUrl) && (
               <div>
                 <h3 className="font-semibold mb-2">Media</h3>
                 <div className="space-y-2">
                   {report.imageUrl && (
-                    <div className="space-y-2">
+                    <>
                       <img
-                        src={report.imageUrl || "/placeholder.svg"}
+                        src={report.imageUrl}
                         alt="Report"
                         className="w-full max-w-sm rounded-lg border"
                       />
@@ -131,26 +172,24 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
                           Copy URL
                         </Button>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {report.audioUrl && (
-                    <div className="space-y-2">
+                    <>
                       <audio controls className="w-full">
                         <source src={report.audioUrl} type="audio/mpeg" />
-                        Your browser does not support the audio element.
                       </audio>
                       <Button variant="outline" size="sm" onClick={() => copyToClipboard(report.audioUrl!)}>
                         <Copy className="h-4 w-4 mr-1" />
                         Copy Audio URL
                       </Button>
-                    </div>
+                    </>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Location */}
             {report.location && (
               <div>
                 <h3 className="font-semibold mb-2 flex items-center gap-2">
@@ -164,58 +203,91 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
             )}
           </div>
 
-          {/* Supervisor Actions */}
+          {/* RIGHT PANEL */}
           <div className="space-y-4">
-            {/* Status Update */}
+            {/* STATUS UPDATE */}
             <div className="space-y-3">
               <h3 className="font-semibold">Update Status</h3>
-              <div className="space-y-2">
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select new status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="acknowledged">Acknowledged</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Textarea
-                  placeholder="Add a note about the status change"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-                <Button onClick={handleStatusUpdate} disabled={!status || isUpdating} className="w-full">
-                  Update Status
-                </Button>
-              </div>
+
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select new status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="acknowledged">Acknowledged</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Textarea
+                placeholder="Add a note about the status change"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+
+              <Button onClick={handleStatusUpdate} disabled={!status || isUpdating} className="w-full">
+                Update Status
+              </Button>
             </div>
 
             <Separator />
 
-            {/* Add Note */}
+            {/* ADD NOTE */}
             <div className="space-y-3">
               <h3 className="font-semibold">Add Progress Note</h3>
-              <div className="space-y-2">
-                <Textarea
-                  placeholder="Add a note about progress or findings..."
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-                <Button
-                  onClick={handleAddNote}
-                  disabled={!note.trim() || isUpdating}
-                  variant="outline"
-                  className="w-full bg-transparent"
-                >
-                  Add Note
-                </Button>
-              </div>
+
+              <Textarea
+                placeholder="Add a note about progress..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+
+              <Button
+                onClick={handleAddNote}
+                disabled={!note.trim() || isUpdating}
+                variant="outline"
+                className="w-full bg-transparent"
+              >
+                Add Note
+              </Button>
+            </div>
+
+            <Separator />
+
+            {/* ASSIGN WORKER */}
+            <div className="space-y-3">
+              <h3 className="font-semibold">Assign to Worker</h3>
+
+              <Select onValueChange={setSelectedWorker} value={selectedWorker}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select worker" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workers.length === 0 && (
+                    <SelectItem value="none" disabled>No workers found</SelectItem>
+                  )}
+
+                  {workers.map((w) => (
+                    <SelectItem key={w.email} value={w.email}>
+                      {w.name} ({w.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                onClick={handleAssignWorker}
+                disabled={!selectedWorker || isUpdating}
+                className="w-full"
+              >
+                Assign Worker
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* Status History */}
+        {/* HISTORY LOG */}
         {report.statusHistory.length > 0 && (
           <div className="mt-6">
             <h3 className="font-semibold mb-3">Activity History</h3>
@@ -226,17 +298,23 @@ export function SupervisorReportDetail({ report, open, onOpenChange }: Superviso
                     <span className="font-medium">
                       {entry.kind === "status"
                         ? "Status changed to"
+                        : entry.kind === "assignment"
+                        ? "Assigned to worker"
                         : entry.kind === "classification"
-                          ? "Classification updated to"
-                          : "Note added"}{" "}
-                      {(entry.status || entry.classification) && (
+                        ? "Classification updated"
+                        : "Note added"}{" "}
+                      {(entry.status || entry.assignedToWorker || entry.classification) && (
                         <Badge variant="outline" className="ml-1">
-                          {entry.status || entry.classification}
+                          {entry.status || entry.assignedToWorker || entry.classification}
                         </Badge>
                       )}
                     </span>
-                    <span className="text-muted-foreground">{format(entry.changedAt.toDate(), "MMM dd, HH:mm")}</span>
+
+                    <span className="text-muted-foreground">
+                      {format(entry.changedAt.toDate(), "MMM dd, HH:mm")}
+                    </span>
                   </div>
+
                   {entry.note && <p className="text-muted-foreground mt-1">{entry.note}</p>}
                   <p className="text-muted-foreground text-xs">by {entry.changedBy}</p>
                 </div>

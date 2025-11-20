@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, query, where, orderBy, onSnapshot, or } from "firebase/firestore"
+import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "./use-auth"
 import type { Report } from "@/lib/types"
@@ -13,7 +13,7 @@ export function useSupervisorReports() {
   const { user } = useAuth()
 
   useEffect(() => {
-    if (!user || user.role !== "supervisor" || !user.dept) {
+    if (!user || user.role !== "supervisor") {
       setLoading(false)
       return
     }
@@ -21,10 +21,7 @@ export function useSupervisorReports() {
     try {
       const reportsQuery = query(
         collection(db, "reports"),
-        or(
-          where("assignedDept", "==", user.dept),
-          where("assignedTo", "==", user.uid)
-        ),
+        where("assignedTo", "==", user.email),   // supervisor email match
         orderBy("createdAt", "desc")
       )
 
@@ -35,6 +32,7 @@ export function useSupervisorReports() {
             id: doc.id,
             ...doc.data(),
           })) as Report[]
+
           setReports(reportsData)
           setLoading(false)
         },
@@ -56,12 +54,15 @@ export function useSupervisorReports() {
   return { reports, loading, error }
 }
 
+// ------------------------------------------------
+// Stats Calculator
+// ------------------------------------------------
 export function useSupervisorStats(reports: Report[]) {
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000)
 
-  const stats = {
+  return {
     total: reports.length,
     open: reports.filter((r) => r.status !== "resolved").length,
     overdue: reports.filter((r) => {
@@ -73,8 +74,6 @@ export function useSupervisorStats(reports: Report[]) {
       return createdAt >= todayStart
     }).length,
     acknowledged: reports.filter((r) => r.status === "acknowledged").length,
-    inProgress: reports.filter((r) => r.status === "in_progress").length,
+    inProgress: reports.filter((r) => r.status === "in-progress").length,
   }
-
-  return stats
 }
